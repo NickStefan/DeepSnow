@@ -395,6 +395,7 @@ namespace surface
 		const RE::TESLandTexture* lt = tes->GetLandTexture(pos);
 		r.landTexture = lt ? lt->GetFormID() : 0;
 		r.texture = StemOf(lt);
+		if (a_wantNavmesh && lt && lt->materialType) { r.recordMaterial = static_cast<std::uint32_t>(lt->materialType->materialID); }
 		if (lt)
 		{
 			// The road rule on the ground: the LTEX's editor ID, its texture set's editor ID, the diffuse and normal paths.

@@ -59,6 +59,7 @@ namespace surface
 		};
 		std::vector<CoverLayer> coverLayers;  // the base, then the blend layers at the nearest vertex
 		std::uint32_t engineMaterial = 0;     // TES::GetLandMaterialType at the feet
+		std::uint32_t recordMaterial = 0;     // the picked LTEX record's own MNAM (what Seasons of Skyrim leaves alone)
 		float skiPowder = -1.0F;              // SkiingInSkyrim's powder: 9 points 48 apart, engine material snow, no road/path/trail in the texture
 	};
 

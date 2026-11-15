@@ -53,6 +53,8 @@ namespace DebugOverlay
 			case M::kSnowStairs: return "snow stairs";
 			case M::kIce: return "ice";
 			case M::kGrass: return "grass";
+			case M::kDirt: return "dirt";
+			case M::kStone: return "stone";
 			case M::kGravel: return "gravel";
 			case M::kMud: return "mud";
 			case M::kSand: return "sand";
@@ -67,7 +69,6 @@ namespace DebugOverlay
 			case M::kAsh: return "ash";
 			default: break;
 			}
-			// Dirt and stone share a few IDs CommonLib does not name; show the number.
 			static thread_local std::string other;
 			other = std::to_string(a_id);
 			return other.c_str();
@@ -96,7 +97,8 @@ namespace DebugOverlay
 
 			add(Tag::kNone, std::format("texture: {}", r.texture.empty() ? "(default land texture)" : r.texture));
 			if (!r.landEditorID.empty() || r.landTexture) { add(Tag::kNone, std::format("  LTEX {:08X} {}", r.landTexture, r.landEditorID), kFaint); }
-			add(Tag::kNone, std::format("material: texture {} | engine {} | underfoot {}", MaterialName(r.landMaterial), MaterialName(r.engineMaterial), MaterialName(r.material)));
+			add(Tag::kNone, std::format("material: texture {} (record {}) | engine {} | underfoot {}", MaterialName(r.landMaterial), MaterialName(r.recordMaterial),
+				MaterialName(r.engineMaterial), MaterialName(r.material)));
 			if (r.skiPowder >= 0.0F) { add(Tag::kInfo, std::format("SkiingInSkyrim powder: {:.0f}%", r.skiPowder * 100.0F)); }
 			add(Tag::kNone, std::format("result: {} ({})", surface::Name(r.kind), r.why ? r.why : ""), kFaint);
 
