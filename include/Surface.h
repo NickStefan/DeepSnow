@@ -23,6 +23,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace surface
 {
@@ -47,7 +48,21 @@ namespace surface
 		std::uint32_t material = 0;     // the character controller's support collision material (0 = none read)
 		std::uint32_t landMaterial = 0; // the picked landscape texture's material as the engine reports it, seasonal swap included (MATERIAL_ID; kSnow = 398949039), 0 = none
 		bool snowMaterial = false;      // SNOW because of that material ([Surfaces] bSnowMaterial), not a list
+
+		// TEMPORARY debug overlay (player only).
+		struct CoverLayer
+		{
+			std::string stem;            // "" = the default landscape texture
+			std::uint32_t material = 0;
+			float alpha = 1.0F;          // the base is 1
+			bool snow = false;           // counted as snow by Cover
+		};
+		std::vector<CoverLayer> coverLayers;  // the base, then the blend layers at the nearest vertex
+		std::uint32_t engineMaterial = 0;     // TES::GetLandMaterialType at the feet
+		float skiPowder = -1.0F;              // SkiingInSkyrim's powder: 9 points 48 apart, engine material snow, no road/path/trail in the texture
 	};
+
+	bool IsSnowMaterialID(std::uint32_t a_material);
 
 	// Reads the ground under a_actor. a_wantNavmesh: the triangle walk is the expensive part, so only the player asks.
 	Reading Read(RE::Actor* a_actor, bool a_wantNavmesh);

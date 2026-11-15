@@ -136,7 +136,7 @@ namespace surface
 		// Snow cover at the nearest LAND vertex: the base texture under the blend layers, each layer laid over the last
 		// with its alpha (0..255, read in test 78b3). 1 = all snow-list textures, 0 = none. -1 = the LAND is not readable.
 		// 1.3.0: a layer whose material is snow scores 1 too, with [Surfaces] bSnowMaterial on (SurfaceRules.h LayerSnow).
-		float Cover(RE::TESObjectCELL* a_cell, const RE::NiPoint3& a_pos, const Table& a_t)
+		float Cover(RE::TESObjectCELL* a_cell, const RE::NiPoint3& a_pos, const Table& a_t, std::vector<Reading::CoverLayer>* a_layers = nullptr)
 		{
 			if (!a_cell || a_cell->IsInteriorCell()) { return -1.0F; }
 			const RE::EXTERIOR_DATA* ext = a_cell->GetCoordinates();
@@ -155,12 +155,14 @@ namespace surface
 			const bool useMaterial = settings::surfaces::snowMaterial.load();
 			const RE::TESLandTexture* base = ld->defQuadTextures[quad];  // can be null: the worldspace default
 			float c = rules::LayerSnow(snow, StemOf(base), SnowByMaterial(base, useMaterial));
+			if (a_layers) { a_layers->push_back({ StemOf(base), MaterialOf(base), 1.0F, c > 0.5F }); }
 			for (int i = 0; i < 6; ++i)
 			{
 				const RE::TESLandTexture* lt = ld->quadTextures[quad][i];
 				if (!lt) { continue; }
 				const float a = static_cast<float>(static_cast<std::uint8_t>(ld->percents[quad][vtx][i])) / 255.0F;
 				const float s = rules::LayerSnow(snow, StemOf(lt), SnowByMaterial(lt, useMaterial));
+				if (a_layers) { a_layers->push_back({ StemOf(lt), MaterialOf(lt), a, s > 0.5F }); }
 				c = c * (1.0F - a) + s * a;
 			}
 			return std::clamp(c, 0.0F, 1.0F);
@@ -278,6 +280,11 @@ namespace surface
 		return p;
 	}
 
+	bool IsSnowMaterialID(std::uint32_t a_material)
+	{
+		return a_material == static_cast<std::uint32_t>(RE::MATERIAL_ID::kSnow) || a_material == static_cast<std::uint32_t>(RE::MATERIAL_ID::kSnowStairs);
+	}
+
 	Kind ClassifyTexture(const std::string& a_stem)
 	{
 		// ICE first: Ice is Slick owns ice, and a texture in two lists must never be slowed as snow (frozenmarshice01 is
@@ -317,6 +324,22 @@ namespace surface
 
 		const Table& t = CurrentTable();
 		const RE::NiPoint3 pos = a_actor->GetPosition();
+
+		// TEMPORARY debug overlay: the engine's land material and SkiingInSkyrim's powder share, for comparison.
+		if (RE::TES* dbg = a_wantNavmesh ? RE::TES::GetSingleton() : nullptr)
+		{
+			r.engineMaterial = static_cast<std::uint32_t>(dbg->GetLandMaterialType(pos));
+			int powder = 0;
+			for (int i = 0; i < 9; ++i)
+			{
+				const RE::NiPoint3 at{ pos.x + static_cast<float>(i % 3 - 1) * 48.0F, pos.y + static_cast<float>(i / 3 - 1) * 48.0F, pos.z };
+				const RE::TESLandTexture* atTex = dbg->GetLandTexture(at);
+				const std::string tex = Lower(PathOf(atTex ? atTex->textureSet : nullptr, 0));
+				const bool packed = tex.find("road") != std::string::npos || tex.find("path") != std::string::npos || tex.find("trail") != std::string::npos;
+				if (IsSnowMaterialID(static_cast<std::uint32_t>(dbg->GetLandMaterialType(at))) && !packed) { ++powder; }
+			}
+			r.skiPowder = static_cast<float>(powder) / 9.0F;
+		}
 
 		// ICE first, by Ice is Slick's own test: the collision material the character controller stands on (landscape
 		// and meshes alike - 78b3 read LFrozenMarshIce01 as material Ice). A match is ICE whatever the texture says.
@@ -392,7 +415,7 @@ namespace surface
 		}
 		if (r.kind == Kind::kIce) { return r; }
 
-		const float cover = Cover(cell, pos, t);
+		const float cover = Cover(cell, pos, t, a_wantNavmesh ? &r.coverLayers : nullptr);
 		r.cover = cover < 0.0F ? 1.0F : cover;
 
 		if (a_wantNavmesh && settings::roads::useNavmesh)
