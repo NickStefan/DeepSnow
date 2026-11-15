@@ -139,6 +139,9 @@ namespace settings
 				k.push_back(B("Depth", "bUseDTDHeight", depth::useDTDHeight));
 				k.push_back(U("Depth", "uSource", depth::source));
 				k.push_back(F("Depth", "fSDFullDepthUnits", depth::sdFullDepthUnits));
+				k.push_back(F("Depth", "fSmoothSpacing", depth::smoothSpacing));
+				k.push_back(F("Depth", "fSmoothDistance", depth::smoothDistance));
+				k.push_back(F("Depth", "fBandHysteresis", depth::bandHysteresis));
 				for (int i = 0; i < kBandCount; ++i)
 				{
 					k.push_back(F("Bands", std::format("fBand{}Depth", i + 1), bands[i].depth));
@@ -432,6 +435,9 @@ namespace settings
 		ClampAtomic(depth::shelterHeight, 0.0F, 4096.0F);
 		ClampAtomic(depth::fullDepthUnits, 1.0F, 200.0F);
 		ClampAtomic(depth::sdFullDepthUnits, 5.0F, 100.0F);
+		ClampAtomic(depth::smoothSpacing, 0.0F, 256.0F);
+		ClampAtomic(depth::smoothDistance, 0.0F, 1024.0F);
+		ClampAtomic(depth::bandHysteresis, 0.0F, 20.0F);
 		if (depth::source.load() > 2) { depth::source = 0; }
 		for (auto& b : bands)
 		{
@@ -513,6 +519,9 @@ namespace settings
 		depth::useDTDHeight = true;
 		depth::source = 0;
 		depth::sdFullDepthUnits = 30.0F;
+		depth::smoothSpacing = 48.0F;
+		depth::smoothDistance = 200.0F;
+		depth::bandHysteresis = 3.0F;
 		for (int i = 0; i < kBandCount; ++i)
 		{
 			bands[i].depth = kBandDefaults[i].depth;

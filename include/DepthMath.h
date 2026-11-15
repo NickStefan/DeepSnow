@@ -66,4 +66,17 @@ namespace depth::math
 		}
 		return best;
 	}
+
+	// BandFor, but a_previous is kept while the depth is within a_margin % of it: a depth hovering on a threshold does
+	// not flip between two bands every tick. Any band reachable within the margin keeps a_previous.
+	inline int BandWithHysteresis(float a_percent, const std::array<float, kBands>& a_thresholds, int a_previous, float a_margin)
+	{
+		const int now = BandFor(a_percent, a_thresholds);
+		if (a_margin <= 0.0F || a_previous == now || a_previous < 0 || a_previous > kBands) { return now; }
+		const auto depthOf = [&](int a_band) { return a_band == 0 ? -1.0F : a_thresholds[a_band - 1]; };
+		const float lo = depthOf(BandFor(a_percent - a_margin, a_thresholds));
+		const float hi = depthOf(BandFor(a_percent + a_margin, a_thresholds));
+		const float prev = depthOf(a_previous);
+		return lo <= prev && prev <= hi ? a_previous : now;
+	}
 }

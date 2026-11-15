@@ -149,10 +149,21 @@ namespace UI
 			}
 		}
 
+		void RenderSmoothing()
+		{
+			Slider(TR("DS_SmoothSpacing", "Averaged around you"), settings::depth::smoothSpacing, 0.0F, 256.0F, "%.0f",
+				TR("DS_HelpSmoothSpacing", "Deep Snow's own model reads the ground at your feet and at 8 points this many units around you, and uses the average. 0 = your feet only."));
+			Slider(TR("DS_SmoothDistance", "Depth change over"), settings::depth::smoothDistance, 0.0F, 1024.0F, "%.0f",
+				TR("DS_HelpSmoothDistance", "A new depth is reached over this many units walked, so your speed ramps between bands instead of jumping. 0 = at once."));
+			Slider(TR("DS_BandHysteresis", "Band margin"), settings::depth::bandHysteresis, 0.0F, 20.0F, "%.1f",
+				TR("DS_HelpBandHysteresis", "The depth must pass a band's threshold by this many % before the band changes, so standing on a threshold does not flicker."));
+		}
+
 		void RenderModel()
 		{
 			ImGuiMCP::SeparatorText(TR("DS_ModelTitle", "How deep is the snow?"));
 			RenderSource();
+			RenderSmoothing();
 			const std::string units = std::format("{:.0f}", depth::FullDepthUnits());
 			if (depth::ActiveSource() == depth::Source::kSnowDeformation)
 			{
@@ -181,6 +192,8 @@ namespace UI
 			if (s.reading.sheltered) { ImGuiMCP::TextDisabled("%s", TR("DS_StatusRoof", "Under a roof - no snow here.")); }
 			const std::string depthText = std::format("{:.0f}% ({:.1f})", s.depthPercent, s.depthPercent / 100.0F * depth::FullDepthUnits());
 			ImGuiMCP::Text("%s %s", TR("DS_StatusDepth", "Snow depth:"), depthText.c_str());
+			ImGuiMCP::SameLine();
+			ImGuiMCP::TextDisabled("(%s %.0f%%)", TR("DS_StatusDepthFeet", "at your feet:"), s.depthRawPercent);
 			if (s.band > 0)
 			{
 				const auto& b = settings::bands[s.band - 1];

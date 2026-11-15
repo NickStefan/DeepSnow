@@ -18,6 +18,11 @@ log and INI are `DeepSnow`.
 - **Five depth bands.** Each has a starting depth, a movement speed and a stamina cost per second. The speed change is a
   SpeedMult ability from `DeepSnow.esp`, added while the actor stands in the band and removed when it leaves - never an
   absolute SpeedMult write - so it adds to whatever other mods do to movement speed.
+- **Smooth depth under you.** Your depth is not one texture pick at the feet: Deep Snow's own model averages the same
+  formula over a 3x3 grid around you (`[Depth] fSmoothSpacing`, 48 units), the depth follows that average over the
+  distance you walk (`fSmoothDistance`, 200 units, about 3 m) and a band changes only once the depth is past its
+  threshold by `fBandHysteresis` % (3). One odd patch of ground no longer jumps your speed between bands from step to
+  step. Roads and ice still count at once; other people and creatures use the reading at their feet.
 - **Stamina regen penalty (optional, off by default).** Per band, stamina can refill slower (`[Bands] fBandNRegen`, %
   of normal; 100 = no change). It is a StaminaRateMult ability from `DeepSnow.esp`, separate from the stamina cost.
   Other people and creatures get it only within `[NPCs] fRegenRadius` of you (default 4096 units), checked once a

@@ -47,6 +47,10 @@ namespace settings
 		inline std::atomic<bool> useDTDHeight = true;       // bUseDTDHeight:Depth - read SnowRaiseHeight from DTD's INI for the shown units
 		inline std::atomic<std::uint32_t> source = 0;       // uSource:Depth - 0 Auto (Snow Deformation when on, else our model), 1 our model, 2 Snow Deformation
 		inline std::atomic<float> sdFullDepthUnits = 30.0F; // fSDFullDepthUnits:Depth - Snow Deformation's depth (game units) that counts as a full blanket (100 %)
+		// The player's depth, smoothed so one odd texture pick does not flip the band (bands stay steps of speed).
+		inline std::atomic<float> smoothSpacing = 48.0F;    // fSmoothSpacing:Depth - our model is averaged over a 3x3 grid this many units apart (0 = the feet only)
+		inline std::atomic<float> smoothDistance = 200.0F;  // fSmoothDistance:Depth - a new depth is reached over this many units walked (0 = at once)
+		inline std::atomic<float> bandHysteresis = 3.0F;    // fBandHysteresis:Depth - the depth must pass a band's threshold by this many % to change band
 	}
 
 	struct Band

@@ -42,6 +42,21 @@ namespace movement
 			bool road = false;
 		};
 		std::unordered_map<std::uint32_t, Seen> seen;
+
+		// The player's smoothed depth (game thread only): what the bands are read from, so one odd texture pick or a depth
+		// on a threshold does not flip the speed from step to step. NPCs keep the single reading at their feet.
+		struct Smoothed
+		{
+			bool have = false;
+			std::uint32_t worldspace = 0;
+			float x = 0.0F;
+			float y = 0.0F;
+			float depth = 0.0F;
+			int band = 0;
+		};
+		Smoothed playerDepth;
+		constexpr float kSettleSeconds = 2.0F;  // standing still, a new depth is still reached within this long
+		constexpr float kJumpUnits = 1024.0F;   // farther than this in one tick is a teleport or a load: start over
 		std::size_t npcCursor = 0;
 		std::uint64_t lastGeneration = 0;
 		Clock::time_point lastTick{};
@@ -91,6 +106,7 @@ namespace movement
 			surface::Reading reading;
 			float packing = 0.0F;
 			float depth = 0.0F;
+			float rawDepth = 0.0F;  // the feet alone, before the player's smoothing
 			float sdUnits = -1.0F;
 			int groundBand = 0;
 			int band = 0;
@@ -98,6 +114,52 @@ namespace movement
 			bool road = false;
 			float drained = 0.0F;
 		};
+
+		// Our model's depth averaged over a 3x3 grid fSmoothSpacing apart around the feet, every point by the same formula
+		// (its own texture, cover and trail packing). The roof, mesh and navmesh checks stay the feet's: only open land
+		// is averaged. Snow Deformation's depth is a smooth field already, so it is left as read.
+		float AreaPercent(const Result& a_r, std::uint32_t a_worldspace, const RE::NiPoint3& a_pos, float a_now, bool a_snowing)
+		{
+			using K = surface::Kind;
+			const float step = settings::depth::smoothSpacing.load();
+			const K kind = a_r.reading.kind;
+			const bool land = kind == K::kSnow || kind == K::kTrail || kind == K::kOther;
+			if (step <= 0.0F || !land || a_r.reading.sheltered || depth::ActiveSource() != depth::Source::kModel) { return a_r.depth; }
+			float sum = a_r.depth;
+			int n = 1;
+			for (int dx = -1; dx <= 1; ++dx)
+			{
+				for (int dy = -1; dy <= 1; ++dy)
+				{
+					if (dx == 0 && dy == 0) { continue; }
+					const RE::NiPoint3 p{ a_pos.x + static_cast<float>(dx) * step, a_pos.y + static_cast<float>(dy) * step, a_pos.z };
+					const surface::Reading s = surface::ReadLandAt(p);
+					if (s.kind == K::kNone) { continue; }
+					sum += depth::Percent(s, trails::PackingAt(a_worldspace, p.x, p.y, a_now, a_snowing), snowfallBoost.load());
+					++n;
+				}
+			}
+			return sum / static_cast<float>(n);
+		}
+
+		// The player's depth follows the area depth over fSmoothDistance walked (SkiingInSkyrim's powder blend), and over
+		// kSettleSeconds standing still. Roads and ice are exempt and no reading is no snow, so those are taken at once.
+		float SmoothPlayer(const Result& a_r, std::uint32_t a_worldspace, const RE::NiPoint3& a_pos, float a_now, bool a_snowing, float a_seconds)
+		{
+			using K = surface::Kind;
+			const float target = AreaPercent(a_r, a_worldspace, a_pos, a_now, a_snowing);
+			Smoothed& m = playerDepth;
+			const float moved = m.have && m.worldspace == a_worldspace ? std::hypot(a_pos.x - m.x, a_pos.y - m.y) : -1.0F;
+			const float blend = settings::depth::smoothDistance.load();
+			const K kind = a_r.reading.kind;
+			if (blend <= 0.0F || moved < 0.0F || moved > kJumpUnits || kind == K::kNone || kind == K::kIce || kind == K::kRoad) { m.depth = target; }
+			else { m.depth += (target - m.depth) * std::clamp(std::max(moved / blend, a_seconds / kSettleSeconds), 0.0F, 1.0F); }
+			m.have = true;
+			m.worldspace = a_worldspace;
+			m.x = a_pos.x;
+			m.y = a_pos.y;
+			return m.depth;
+		}
 
 		// a_distance: from the player (0 for the player), for the regen radius.
 		Result Process(RE::Actor* a_actor, bool a_isPlayer, float a_now, bool a_snowing, float a_seconds, float a_distance)
@@ -113,7 +175,17 @@ namespace movement
 			}
 			// Snow Deformation's depth already carries its accumulation, so our snowfall boost applies only to our own model.
 			r.depth = depth::PercentFor(a_actor, r.reading, r.packing, snowfallBoost.load(), &r.sdUnits);
-			r.groundBand = depth::BandFor(r.depth);
+			r.rawDepth = r.depth;
+			if (a_isPlayer)
+			{
+				r.depth = SmoothPlayer(r, ws ? ws->GetFormID() : 0, pos, a_now, a_snowing, a_seconds);
+				r.groundBand = depth::BandFor(r.depth, playerDepth.band);
+				playerDepth.band = r.groundBand;
+			}
+			else
+			{
+				r.groundBand = depth::BandFor(r.depth);
+			}
 			r.band = r.groundBand;
 			r.road = r.reading.kind == surface::Kind::kRoad && settings::roads::bonus;
 			if (a_isPlayer && forced.load() >= 0)
@@ -134,9 +206,9 @@ namespace movement
 			{
 				if (a_isPlayer || s.band != r.band || s.road != r.road)
 				{
-					logger::debug("[tick] {:08X}{}: {} ({}) tex='{}' ltex='{}' roadBy='{}' cover={:.2f} packing={:.2f} sheltered={} sd={:.1f}u depth={:.1f}% -> band {} -> {}{}{}", a_actor->GetFormID(),
+					logger::debug("[tick] {:08X}{}: {} ({}) tex='{}' ltex='{}' roadBy='{}' cover={:.2f} packing={:.2f} sheltered={} sd={:.1f}u depth={:.1f}% (feet {:.1f}%) -> band {} -> {}{}{}", a_actor->GetFormID(),
 						a_isPlayer ? " (player)" : "", surface::Name(r.reading.kind), r.reading.why, r.reading.texture, r.reading.landEditorID, r.reading.roadBy, r.reading.cover, r.packing, r.reading.sheltered,
-						r.sdUnits, r.depth, r.groundBand, r.band, r.road ? " +road" : "", a_isPlayer && forced.load() >= 0 ? " (forced)" : "");
+						r.sdUnits, r.depth, r.rawDepth, r.groundBand, r.band, r.road ? " +road" : "", a_isPlayer && forced.load() >= 0 ? " (forced)" : "");
 				}
 				s.band = r.band;
 				s.road = r.road;
@@ -160,6 +232,7 @@ namespace movement
 				if (auto* a = RE::TESForm::LookupByID<RE::Actor>(id)) { effects::Set(a, 0, false); effects::SetRegen(a, 0); }
 			}
 			seen.clear();
+			playerDepth = {};
 		}
 
 		std::string Esc(const std::string& a_s);
@@ -279,6 +352,7 @@ namespace movement
 			{
 				effects::ResetAfterLoad();
 				seen.clear();
+				playerDepth = {};
 				npcCursor = 0;
 				lastDays = -1.0F;
 				actorsJson = "[]";
@@ -394,6 +468,7 @@ namespace movement
 			snap.packing = pr.packing;
 			snap.snowfall = snowfallBoost.load();
 			snap.depthPercent = pr.depth;
+			snap.depthRawPercent = pr.rawDepth;
 			snap.depthSource = static_cast<int>(depth::ActiveSource());
 			snap.sdUnits = pr.sdUnits;
 			snap.groundBand = pr.groundBand;
@@ -496,7 +571,7 @@ namespace movement
 		return std::format(
 			"{{\"havePlayer\":{},\"enabled\":{},\"effectsReady\":{},\"surface\":\"{}\",\"why\":\"{}\",\"texture\":\"{}\",\"landTexture\":\"{:08X}\",\"landEditorId\":\"{}\",\"textureSetEditorId\":\"{}\",\"roadBy\":\"{}\",\"editorIdsKept\":{},\"model\":\"{}\",\"material\":{},\"cover\":{:.3f},"
 			"\"preferred\":{},\"navmeshRead\":{},\"sheltered\":{},\"roofDistance\":{:.1f},\"packing\":{:.3f},\"snowfall\":{:.3f},\"snowing\":{},"
-			"\"depthPercent\":{:.2f},\"depthSource\":\"{}\",\"depthSourceSetting\":{},\"sdFound\":{},\"sdActive\":{},\"sdUnits\":{:.2f},\"sdFullDepthUnits\":{:.1f},"
+			"\"depthPercent\":{:.2f},\"depthRawPercent\":{:.2f},\"depthSource\":\"{}\",\"depthSourceSetting\":{},\"sdFound\":{},\"sdActive\":{},\"sdUnits\":{:.2f},\"sdFullDepthUnits\":{:.1f},"
 			"\"fullDepthUnits\":{:.1f},\"fullDepthSource\":\"{}\",\"depthUnits\":{:.2f},\"groundBand\":{},\"band\":{},\"forcedBand\":{},\"road\":{},"
 			"\"moving\":{},\"speedMult\":{:.2f},\"stamina\":{:.2f},\"drainedLastSecond\":{:.3f},\"ticks\":{},\"tickUsAvg\":{:.1f},\"tickUsMax\":{:.1f},"
 			"\"npcsNear\":{},\"npcsClassified\":{},\"npcsAffected\":{},\"affectPeople\":{},\"affectCreatures\":{},\"peopleClassified\":{},\"creaturesClassified\":{},"
@@ -505,7 +580,7 @@ namespace movement
 			"\"regen\":{{\"ready\":{},\"band\":{},\"staminaRateMult\":{:.2f},\"radius\":{:.0f},\"radiusEffective\":{:.0f},\"checkIntervalMs\":{},\"checks\":{},"
 			"\"npcsInRadius\":{},\"npcsWithRegen\":{},\"removedLastCheck\":{},\"removedTotal\":{}}},\"actors\":{}}}",
 			B(s.havePlayer), B(s.enabled), B(s.effectsReady), surface::Name(r.kind), Esc(r.why ? r.why : ""), Esc(r.texture), r.landTexture, Esc(r.landEditorID), Esc(r.textureSetEditorID), Esc(r.roadBy), editor_ids::Count(), Esc(r.model), r.material, r.cover, B(r.preferred),
-			B(r.navmeshRead), B(r.sheltered), r.roofDistance, s.packing, s.snowfall, B(s.snowing), s.depthPercent, depth::SourceName(static_cast<depth::Source>(s.depthSource)), settings::depth::source.load(),
+			B(r.navmeshRead), B(r.sheltered), r.roofDistance, s.packing, s.snowfall, B(s.snowing), s.depthPercent, s.depthRawPercent, depth::SourceName(static_cast<depth::Source>(s.depthSource)), settings::depth::source.load(),
 			B(depth::SnowDeformationFound()), B(depth::SnowDeformationActive()), s.sdUnits, settings::depth::sdFullDepthUnits.load(), depth::FullDepthUnits(), depth::FullDepthSource(),
 			s.depthPercent / 100.0F * depth::FullDepthUnits(), s.groundBand, s.band, s.forcedBand, B(s.road), B(s.moving), s.speedMult, s.stamina, s.drainedLastSecond,
 			s.ticks, s.tickUsAvg, s.tickUsMax, s.npcsNear, s.npcsClassified, s.npcsAffected, B(settings::general::affectPeople), B(settings::general::affectCreatures),

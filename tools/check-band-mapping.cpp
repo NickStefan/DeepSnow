@@ -72,5 +72,20 @@ int main()
 	Case("thresholds out of order: deepest reached wins", Snow(18.0F), 60.0F, 3, unordered);
 
 	std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
+	// Hysteresis (fBandHysteresis): the previous band is kept while the depth is within the margin of it.
+	const auto Hyst = [](const char* a_name, float a_pct, int a_prev, float a_margin, int a_want) {
+		const int band = depth::math::BandWithHysteresis(a_pct, kDefaults, a_prev, a_margin);
+		std::printf("%s  %-62s %6.2f%% prev %d margin %.1f -> band %d (want %d)\n", band == a_want ? "ok  " : "FAIL", a_name, a_pct, a_prev, a_margin, band, a_want);
+		if (band != a_want) { ++failures; }
+	};
+	Hyst("just over 30% from band 1: stays 1", 31.0F, 1, 3.0F, 1);
+	Hyst("clearly over 30% from band 1: goes to 2", 34.0F, 1, 3.0F, 2);
+	Hyst("just under 30% from band 2: stays 2", 28.0F, 2, 3.0F, 2);
+	Hyst("clearly under 30% from band 2: goes to 1", 26.0F, 2, 3.0F, 1);
+	Hyst("no snow from band 3: goes to 0", 0.0F, 3, 3.0F, 0);
+	Hyst("jump of two bands: taken at once", 55.0F, 1, 3.0F, 3);
+	Hyst("margin 0: plain BandFor", 31.0F, 1, 0.0F, 2);
+	Hyst("just over 10% from no band: stays 0", 11.0F, 0, 3.0F, 0);
+
 	return failures ? 1 : 0;
 }

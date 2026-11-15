@@ -22,7 +22,8 @@ namespace movement
 		surface::Reading reading;
 		float packing = 0.0F;
 		float snowfall = 0.0F;   // the boost, 0..fMax/100
-		float depthPercent = 0.0F;
+		float depthPercent = 0.0F;     // what the bands are read from (smoothed, [Depth] fSmooth*)
+		float depthRawPercent = 0.0F;  // the feet alone, before smoothing
 		int depthSource = 1;     // depth::Source of the last reading: 1 our model, 2 Snow Deformation
 		float sdUnits = -1.0F;   // Snow Deformation's raw reading under the player, game units (-1 = not asked)
 		int band = 0;            // what is applied to the player

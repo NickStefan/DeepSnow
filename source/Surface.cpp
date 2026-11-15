@@ -321,6 +321,12 @@ namespace surface
 		return false;
 	}
 
+	namespace
+	{
+		// The land at a point: the texture pick, its row and the snow cover there. Shared by Read and ReadLandAt.
+		void ReadLand(RE::TES* a_tes, RE::TESObjectCELL* a_cell, const RE::NiPoint3& a_pos, const Table& a_table, Reading& r);
+	}
+
 	Reading Read(RE::Actor* a_actor, bool a_wantNavmesh)
 	{
 		Reading r;
@@ -386,31 +392,8 @@ namespace surface
 			r.why = "no TES";
 			return r;
 		}
-		const RE::TESLandTexture* lt = tes->GetLandTexture(pos);
-		r.landTexture = lt ? lt->GetFormID() : 0;
-		r.texture = StemOf(lt);
-		if (lt)
-		{
-			// The road rule on the ground: the LTEX's editor ID, its texture set's editor ID, the diffuse and normal paths.
-			const RE::BGSTextureSet* ts = lt->textureSet;
-			r.landEditorID = editor_ids::Get(lt);
-			r.textureSetEditorID = editor_ids::Get(ts);
-			r.landMaterial = MaterialOf(lt);
-			bool byMaterial = false;
-			r.kind = rules::ClassifyLand(r.texture, { r.landEditorID, r.textureSetEditorID, PathOf(ts, 0), PathOf(ts, 1) }, ListsOf(t), &r.roadBy,
-				settings::roads::pathsAreRoads.load(), SnowByMaterial(lt, settings::surfaces::snowMaterial.load()), &byMaterial);
-			r.snowMaterial = byMaterial;
-			r.why = r.kind == Kind::kRoad ? (r.roadBy == "sRoad" ? "road texture list" : "road in the name") : byMaterial ? "snow material" : "land texture";
-		}
-		else
-		{
-			r.kind = Kind::kOther;
-			r.why = "default land texture";
-		}
+		ReadLand(tes, cell, pos, t, r);
 		if (r.kind == Kind::kIce) { return r; }
-
-		const float cover = Cover(cell, pos, t);
-		r.cover = cover < 0.0F ? 1.0F : cover;
 
 		if (a_wantNavmesh && settings::roads::useNavmesh)
 		{
@@ -425,5 +408,49 @@ namespace surface
 			}
 		}
 		return r;
+	}
+
+	Reading ReadLandAt(const RE::NiPoint3& a_pos)
+	{
+		Reading r;
+		RE::TES* tes = RE::TES::GetSingleton();
+		RE::TESObjectCELL* cell = tes ? tes->GetCell(a_pos) : nullptr;
+		if (!cell || cell->IsInteriorCell()) { r.why = "not loaded"; return r; }
+		ReadLand(tes, cell, a_pos, CurrentTable(), r);
+		return r;
+	}
+
+	namespace
+	{
+		void ReadLand(RE::TES* a_tes, RE::TESObjectCELL* a_cell, const RE::NiPoint3& a_pos, const Table& a_table, Reading& r)
+		{
+			const Table& t = a_table;
+			const RE::NiPoint3& pos = a_pos;
+			const RE::TESLandTexture* lt = a_tes->GetLandTexture(pos);
+			r.landTexture = lt ? lt->GetFormID() : 0;
+			r.texture = StemOf(lt);
+			if (lt)
+			{
+				// The road rule on the ground: the LTEX's editor ID, its texture set's editor ID, the diffuse and normal paths.
+				const RE::BGSTextureSet* ts = lt->textureSet;
+				r.landEditorID = editor_ids::Get(lt);
+				r.textureSetEditorID = editor_ids::Get(ts);
+				r.landMaterial = MaterialOf(lt);
+				bool byMaterial = false;
+				r.kind = rules::ClassifyLand(r.texture, { r.landEditorID, r.textureSetEditorID, PathOf(ts, 0), PathOf(ts, 1) }, ListsOf(t), &r.roadBy,
+					settings::roads::pathsAreRoads.load(), SnowByMaterial(lt, settings::surfaces::snowMaterial.load()), &byMaterial);
+				r.snowMaterial = byMaterial;
+				r.why = r.kind == Kind::kRoad ? (r.roadBy == "sRoad" ? "road texture list" : "road in the name") : byMaterial ? "snow material" : "land texture";
+			}
+			else
+			{
+				r.kind = Kind::kOther;
+				r.why = "default land texture";
+			}
+			if (r.kind == Kind::kIce) { return; }
+
+			const float cover = Cover(a_cell, pos, t);
+			r.cover = cover < 0.0F ? 1.0F : cover;
+		}
 	}
 }

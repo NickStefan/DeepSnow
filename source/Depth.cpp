@@ -160,6 +160,13 @@ namespace depth
 		return math::BandFor(a_percent, t);
 	}
 
+	int BandFor(float a_percent, int a_previous)
+	{
+		std::array<float, math::kBands> t{};
+		for (int i = 0; i < math::kBands; ++i) { t[i] = settings::bands[i].depth.load(); }
+		return math::BandWithHysteresis(a_percent, t, a_previous, settings::depth::bandHysteresis.load());
+	}
+
 	float FullDepthUnits()
 	{
 		if (ActiveSource() == Source::kSnowDeformation) { return settings::depth::sdFullDepthUnits.load(); }

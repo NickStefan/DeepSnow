@@ -29,6 +29,8 @@ namespace depth
 	float Percent(const surface::Reading& a_r, float a_packing, float a_snowfall);
 	// 0 = no band, 1..5 = the deepest band whose threshold the depth reaches.
 	int BandFor(float a_percent);
+	// The same, keeping a_previous while the depth is within [Depth] fBandHysteresis % of it.
+	int BandFor(float a_percent, int a_previous);
 	// Units of a full blanket (DTD's SnowRaiseHeight when read, else fFullDepthUnits) - for showing units beside %.
 	float FullDepthUnits();
 	const char* FullDepthSource();  // "DTD", "INI" or "SnowDeformation"

@@ -51,6 +51,8 @@ namespace surface
 
 	// Reads the ground under a_actor. a_wantNavmesh: the triangle walk is the expensive part, so only the player asks.
 	Reading Read(RE::Actor* a_actor, bool a_wantNavmesh);
+	// The land alone at a point (texture, row, cover) - no rays, no mesh, no navmesh. NONE where no exterior cell is loaded.
+	Reading ReadLandAt(const RE::NiPoint3& a_pos);
 
 	// The surface table on its own (for DevBench and the page): which surface a texture stem is, by the lists and the
 	// road rule applied to the stem itself.
