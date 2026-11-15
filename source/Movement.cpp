@@ -142,7 +142,7 @@ namespace movement
 			return sum / static_cast<float>(n);
 		}
 
-		// The player's depth follows the area depth over fSmoothDistance walked (SkiingInSkyrim's powder blend), and over
+		// The player's depth follows the area depth over fSmoothDistance walked, and over
 		// kSettleSeconds standing still. Roads and ice are exempt and no reading is no snow, so those are taken at once.
 		float SmoothPlayer(const Result& a_r, std::uint32_t a_worldspace, const RE::NiPoint3& a_pos, float a_now, bool a_snowing, float a_seconds)
 		{

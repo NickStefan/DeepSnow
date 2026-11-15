@@ -13,7 +13,7 @@ Written as changes happen, not reconstructed afterwards (rule 61). Each version 
 ### Fixed
 - The player's speed no longer jumps between bands from one step to the next on mixed ground. The depth was one texture pick at the feet, so a single grass pick in a snow field, or a depth hovering on a threshold, flipped the band every tick. The formula is unchanged; the player's depth is now smoothed in three ways, each its own [Depth] key and slider on the settings page (0 turns it off):
   - fSmoothSpacing (48 units): Deep Snow's own model is averaged over a 3x3 grid around the feet, every point by the same formula (its own texture, snow cover and trail packing). The roof, mesh, ice and navmesh checks stay the feet's; on a mesh or under a roof nothing is averaged. Snow Deformation's depth is left as read.
-  - fSmoothDistance (200 units, about 3 m): the depth follows that average over the distance walked (SkiingInSkyrim's powder blend), and within 2 seconds standing still. Roads and ice, being exempt, still count at once; a teleport or a load starts over.
+  - fSmoothDistance (200 units, about 3 m): the depth follows that average over the distance walked, and within 2 seconds standing still. Roads and ice, being exempt, still count at once; a teleport or a load starts over.
   - fBandHysteresis (3 %): a band changes only once the depth is past its threshold by that much, so a depth on a threshold does not flicker. A jump of more than one band is taken at once.
 - Other people and creatures are unchanged (one reading at their feet), so the cost per tick barely grows.
 - Settings page status: the depth at your feet is shown beside the smoothed depth; deepsnow.state gains depthRawPercent.
