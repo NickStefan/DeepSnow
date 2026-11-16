@@ -8,6 +8,7 @@
 #include "PreciseSlider.h"
 #include "SliderNudge.h"
 
+#include "DebugOverlay.h"
 #include "Depth.h"
 #include "Movement.h"
 #include "Settings.h"
@@ -345,6 +346,8 @@ namespace UI
 				ApplyLogLevel();
 			}
 			Help(TR("DS_HelpLogLevel", "Applies at once. The log is Documents\\My Games\\Skyrim Special Edition\\SKSE\\DeepSnow.log."));
+			bool overlay = DebugOverlay::show.load();
+			if (ImGuiMCP::Toggle("Debug overlay (upper right)", &overlay)) { DebugOverlay::show = overlay; }
 		}
 
 		void RenderButtons()
@@ -377,6 +380,7 @@ namespace UI
 			logger::info("[page] no menu framework is installed; settings come from the INI only");
 			return;
 		}
+		DebugOverlay::Register();
 		if (!HasRequiredExports())
 		{
 			logger::warn("[page] the installed menu framework is older than this page needs; update Apocrypha Menu Framework to configure Deep Snow in game");

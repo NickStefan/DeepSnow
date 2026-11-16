@@ -54,6 +54,12 @@ namespace movement
 		std::uint64_t regenRemovedTotal = 0;
 		std::string actorsJson = "[]";  // the actors holding any of our abilities (at most 24), rebuilt at each check
 		std::size_t trailSquares = 0;
+		// TEMPORARY (debug overlay branch): the reading at the feet before the follow, and the largest band change in
+		// the last 10 s with and without it.
+		float feetDepth = 0.0F;
+		int feetBand = 0;
+		int largestFeetStep = 0;
+		int largestAppliedStep = 0;
 	};
 
 	void Start();  // kDataLoaded, once

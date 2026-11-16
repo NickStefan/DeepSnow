@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <cmath>
 #include <format>
 #include <mutex>
@@ -56,6 +57,28 @@ namespace movement
 		Smoothed playerDepth;
 		constexpr float kSettleSeconds = 2.0F;  // standing still, a new depth is still reached within this long
 		constexpr float kJumpUnits = 1024.0F;   // farther than this in one tick is a teleport or a load: start over
+
+		// TEMPORARY (debug overlay branch): the largest band change in the last 10 s.
+		struct StepHistory
+		{
+			int last = 0;
+			std::deque<std::pair<Clock::time_point, int>> steps;
+
+			int Largest(int a_band, Clock::time_point a_now)
+			{
+				if (a_band != last) { steps.emplace_back(a_now, std::abs(a_band - last)); last = a_band; }
+				while (!steps.empty() && a_now - steps.front().first > std::chrono::seconds(10)) { steps.pop_front(); }
+				int largest = 0;
+				for (const auto& [when, step] : steps) { largest = std::max(largest, step); }
+				return largest;
+			}
+		};
+		StepHistory feetSteps;
+		StepHistory appliedSteps;
+		float feetDepth = 0.0F;
+		int feetBand = 0;
+		int largestFeetStep = 0;
+		int largestAppliedStep = 0;
 		std::size_t npcCursor = 0;
 		std::uint64_t lastGeneration = 0;
 		Clock::time_point lastTick{};
@@ -144,8 +167,19 @@ namespace movement
 			}
 			// Snow Deformation's depth already carries its accumulation, so our snowfall boost applies only to our own model.
 			r.depth = depth::PercentFor(a_actor, r.reading, r.packing, snowfallBoost.load(), &r.sdUnits);
-			if (a_isPlayer) { r.depth = SmoothPlayer(r, ws ? ws->GetFormID() : 0, pos, a_seconds); }
+			if (a_isPlayer)
+			{
+				feetDepth = r.depth;
+				r.depth = SmoothPlayer(r, ws ? ws->GetFormID() : 0, pos, a_seconds);
+			}
 			r.groundBand = depth::BandFor(r.depth);
+			if (a_isPlayer)
+			{
+				const auto now = Clock::now();
+				feetBand = depth::BandFor(feetDepth);
+				largestFeetStep = feetSteps.Largest(feetBand, now);
+				largestAppliedStep = appliedSteps.Largest(r.groundBand, now);
+			}
 			r.band = r.groundBand;
 			r.road = r.reading.kind == surface::Kind::kRoad && settings::roads::bonus;
 			if (a_isPlayer && forced.load() >= 0)
@@ -428,6 +462,10 @@ namespace movement
 			snap.packing = pr.packing;
 			snap.snowfall = snowfallBoost.load();
 			snap.depthPercent = pr.depth;
+			snap.feetDepth = feetDepth;
+			snap.feetBand = feetBand;
+			snap.largestFeetStep = largestFeetStep;
+			snap.largestAppliedStep = largestAppliedStep;
 			snap.depthSource = static_cast<int>(depth::ActiveSource());
 			snap.sdUnits = pr.sdUnits;
 			snap.groundBand = pr.groundBand;
